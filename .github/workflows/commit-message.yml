@@ -1,0 +1,18 @@
+name: Commit Message Workflow
+
+# Déclencheurs : push sur main + déclenchement manuel
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:   # permet le lancement manuel depuis l'onglet Actions
+
+jobs:
+  afficher-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Récupérer le code (et l'historique des commits)
+        uses: actions/checkout@v4
+
+      - name: 📢 Afficher le message du dernier commit
+        run: echo "Dernier commit : $(git log -1 --pretty=%B)"
