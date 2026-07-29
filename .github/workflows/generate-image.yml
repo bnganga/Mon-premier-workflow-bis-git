@@ -1,0 +1,64 @@
+name: Génération d'Image et Déploiement GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  generate-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # nécessaire pour que le job puisse pousser sur la branche gh-pages
+
+    steps:
+      - name: 📥 Cloner le dépôt
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # récupère tout l'historique, nécessaire pour git log
+
+      - name: 📝 Récupérer le message du dernier commit
+        id: commit_message
+        run: |
+          MESSAGE=$(git log -1 --pretty=%B)
+          echo "message=$MESSAGE" >> "$GITHUB_OUTPUT"
+
+      - name: 📂 Créer le dossier images
+        run: mkdir -p images
+
+      - name: 🎨 Générer l'image via DynaPictures
+        env:
+          API_KEY: ${{ secrets.DYNAPICTURES_API_KEY }}
+          TEMPLATE_ID: ${{ secrets.DYNAPICTURES_TEMPLATE_ID }}
+        run: |
+          COMMIT_MSG="${{ steps.commit_message.outputs.message }}"
+          TIMESTAMP=$(date +%s)
+
+          # Appel à l'API DynaPictures pour générer l'image
+          RESPONSE=$(curl -s -X POST "https://api.dynapictures.com/templates/$TEMPLATE_ID/renders" \
+            -H "X-API-KEY: $API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"data\":[{\"layerName\":\"title\",\"text\":\"$COMMIT_MSG\"}]}")
+
+          # Extraction de l'URL de l'image générée depuis la réponse JSON
+          IMAGE_URL=$(echo "$RESPONSE" | grep -o '"url":"[^"]*' | sed 's/"url":"//' | head -1)
+
+          # Téléchargement de l'image
+          curl -s -o "images/commit-$TIMESTAMP.png" "$IMAGE_URL"
+
+      - name: 🌐 Générer le fichier index.html
+        run: |
+          echo "<html><head><title>Commits Gallery</title></head><body>" > images/index.html
+          echo "<h1>🎨 Images générées par commit</h1>" >> images/index.html
+          for img in images/*.png; do
+            filename=$(basename "$img")
+            echo "<div><img src=\"$filename\" width=\"400\"><p>$filename</p></div>" >> images/index.html
+          done
+          echo "</body></html>" >> images/index.html
+
+      - name: 🚀 Déployer sur GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./images
