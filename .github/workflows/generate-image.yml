@@ -36,13 +36,17 @@ jobs:
           TIMESTAMP=$(date +%s)
 
           # Appel à l'API DynaPictures pour générer l'image
-          RESPONSE=$(curl -s -X POST "https://api.dynapictures.com/templates/$TEMPLATE_ID/renders" \
-            -H "X-API-KEY: $API_KEY" \
+          RESPONSE=$(curl -s -X POST "https://api.dynapictures.com/designs/$TEMPLATE_ID" \
+            -H "Authorization: Bearer $API_KEY" \
             -H "Content-Type: application/json" \
-            -d "{\"data\":[{\"layerName\":\"title\",\"text\":\"$COMMIT_MSG\"}]}")
+            -d "{\"params\":[{\"name\":\"title\",\"text\":\"$COMMIT_MSG\"}]}")
 
-          # Extraction de l'URL de l'image générée depuis la réponse JSON
-          IMAGE_URL=$(echo "$RESPONSE" | grep -o '"url":"[^"]*' | sed 's/"url":"//' | head -1)
+          echo "Réponse API : $RESPONSE"
+
+          # Extraction de l'URL de l'image générée (avec jq, plus fiable)
+          IMAGE_URL=$(echo "$RESPONSE" | jq -r '.imageUrl')
+
+          echo "URL image : $IMAGE_URL"
 
           # Téléchargement de l'image
           curl -s -o "images/commit-$TIMESTAMP.png" "$IMAGE_URL"
