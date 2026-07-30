@@ -1,19 +1,17 @@
-name: Ajouter un Commentaire sur un Commit avec Image
+name: Génération d'Image et Déploiement GitHub Pages
 
-# 🎯 Déclenchement après un push sur main
 on:
   push:
     branches:
       - main
-
-# 🔐 Permissions nécessaires pour commenter le commit
-permissions:
-  contents: write
-  issues: write
+  workflow_dispatch:
 
 jobs:
-  comment-on-commit:
+  generate-image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 🔑 nécessaire pour pouvoir pousser le commit
+
     steps:
       - name: 📥 Cloner le dépôt
         uses: actions/checkout@v4
@@ -23,35 +21,38 @@ jobs:
       - name: 📝 Récupérer le message du dernier commit
         run: echo "MESSAGE=$(git log -1 --pretty=%B)" >> $GITHUB_ENV
 
-      - name: 📥 Télécharger l'artefact contenant l'image
-        uses: actions/download-artifact@v4
+      - name: 📂 Créer le dossier images
+        run: mkdir -p images
+
+      - name: 🎨 Générer l'image via DynaPictures
+        env:
+          API_KEY: ${{ secrets.DYNAPICTURES_API_KEY }}
+          TEMPLATE_ID: ${{ secrets.DYNAPICTURES_TEMPLATE_ID }}
+        run: |
+          TIMESTAMP=$(date +%s)
+          FILENAME="commit-$TIMESTAMP.png"
+
+          RESPONSE=$(curl -s -X POST "https://api.dynapictures.com/designs/$TEMPLATE_ID" \
+            -H "Authorization: Bearer $API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"params\":[{\"name\":\"title\",\"text\":\"$MESSAGE\"}]}")
+
+          IMAGE_URL=$(echo "$RESPONSE" | jq -r '.imageUrl')
+          curl -s -o "images/$FILENAME" "$IMAGE_URL"
+
+          echo "Fichier généré : $FILENAME"
+
+      # 👇 NOUVELLE ÉTAPE À AJOUTER
+      - name: 💾 Committer l'image générée dans le repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add images/
+          git commit -m "🤖 Ajout image générée automatiquement" || echo "Rien à committer"
+          git push
+
+      - name: 💾 Sauvegarder l'image en tant qu'artefact
+        uses: actions/upload-artifact@v4
         with:
           name: image-generee
-          path: ./artifacts/
-
-      - name: 🔍 Récupérer dynamiquement le nom du fichier image
-        run: |
-          IMAGE_NAME=$(ls ./artifacts | head -n 1)
-          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
-          echo "Nom du fichier trouvé : $IMAGE_NAME"
-
-      - name: 🔗 Construire l'URL de l'image hébergée sur GitHub
-        run: |
-          REPO_NAME="${{ github.event.repository.name }}"
-          REPO_OWNER="${{ github.repository_owner }}"
-          BRANCH="main"
-          IMAGE_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/images/${IMAGE_NAME}"
-          echo "IMAGE_URL=$IMAGE_URL" >> $GITHUB_ENV
-          echo "URL construite : $IMAGE_URL"
-
-      - name: 💬 Ajouter un commentaire sur le commit
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            github.rest.repos.createCommitComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              commit_sha: context.sha,
-              body: "🚀 **Nouveau Commit Détecté !**\n\n📝 **Message du Commit :**\n" + process.env.MESSAGE + "\n\n📷 **Image générée :**\n![Image générée](" + process.env.IMAGE_URL + ")\n\n📢 _Ce message est généré automatiquement._"
-            });
+          path: images/
