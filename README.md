@@ -11,3 +11,5 @@
 
 ![Taille du dépôt](https://img.shields.io/github/repo-size/bnganga/Mon-premier-workflow-bis-git)
 ![Issues ouvertes](https://img.shields.io/github/issues/bnganga/Mon-premier-workflow-bis-git)
+
+[![Triage des issues](https://github.com/bnganga/Mon-premier-workflow-bis-git/actions/workflows/triage-issues.yml/badge.svg?branch=main)](https://github.com/bnganga/Mon-premier-workflow-bis-git/actions/workflows/triage-issues.yml)
