@@ -1,0 +1,49 @@
+name: Triage automatique des issues
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Cloner le dépôt
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 📋 Lister les issues déjà ouvertes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh issue list --state open --limit 50 --json number,title > issuesexistantes.json
+
+      - name: 🤖 Analyser l'issue (label + doublon + injection)
+        id: analyse
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ISSUE_TITRE: ${{ github.event.issue.title }}
+          ISSUE_CORPS: ${{ github.event.issue.body }}
+          ISSUE_NUMERO: ${{ github.event.issue.number }}
+        run: node scripts/triage-issue.js
+
+      - name: 🏷 Poser le label si valide
+        if: steps.analyse.outputs.label != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMERO: ${{ github.event.issue.number }}
+          LABEL: ${{ steps.analyse.outputs.label }}
+        run: gh issue edit "$NUMERO" --add-label "$LABEL"
+
+      - name: 💬 Poster le commentaire d'accueil
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMERO: ${{ github.event.issue.number }}
+        run: gh issue comment "$NUMERO" --body-file commentaire.md
